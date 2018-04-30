@@ -92,7 +92,7 @@ def train():
         logging.info("Building train input pipeline")
         input_train_iter = build_input_pipeline(train_files,
                                                 config.TRAIN_BATCH_SIZE,
-                                                num_epochs=config.NUM_EPOCHS)  # change num_epochs to None in production
+                                                num_epochs=None)  # change num_epochs to None in production
 
         logging.info("Building validation input pipeline")
         input_validation_iter = build_input_pipeline(validation_files,
@@ -119,18 +119,21 @@ def train():
         batch = 0
         epoch_step = 0
         num_batches_train = int(1000000/config.TRAIN_BATCH_SIZE)
-        num_batches_valid = int(19560/config.VALIDATION_BATCH_SIZE)
+        num_batches_valid = int(195600/config.VALIDATION_BATCH_SIZE)
         evaluation_metric_old = 0.0
         evaluation_metric_history = deque([0.0, 0.0, 0.0, 0.0, 0.0], 5)  # used for early stopping
         try:
             while True:
                 # here calculate accuracy and/or training loss
                 _, loss = sess.run([train_op, model.get_loss()])
-                logger.info("Epoch step: {0} Train step: {1} loss = {2}".format(epoch_step, batch, loss))
+
+                if batch % 100 == 0:
+                    logger.info("Epoch step: {0} Train step: {1} loss = {2}".format(epoch_step, batch, loss))
+                
                 batch += 1
 
                 # evaluate the model with the validation set every 1/4 of the epoch
-                if batch % int(0.001 * num_batches_train) == 0:  # change 0.01 to 0.25 in production
+                if batch % int(0.25 * num_batches_train) == 0:  # change 0.01 to 0.25 in production
 
                     # evaluate the model on validation dataset
                     logger.info("Evaluating on the validation dataset...")
@@ -143,8 +146,8 @@ def train():
                             logger.info("Epoch step: {0} Train step: {1} Valid step: {2}".format(epoch_step,
                             batch, b))
 
-                        if b == 300:  # remove this break condition in production
-                            break
+                        #if b == 300:  # remove this break condition in production
+                        #    break
 
                     evaluation_metric_new = utils.get_recall_values(probs)[0]  # returns a tuple of list with
                     # Recall@1,2 and 5 and model_responses
