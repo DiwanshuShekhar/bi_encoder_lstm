@@ -64,7 +64,7 @@ def build_input_pipeline(in_files, batch_size, num_epochs=None, mode='train'):
     """
     dataset = tf.contrib.data.TFRecordDataset(in_files)
     dataset = dataset.map(parse_input, num_threads=12,
-                          output_buffer_size=10 * batch_size)  # Parse the record to tensor
+                                       output_buffer_size=10 * batch_size)  # Parse the record to tensor
 
     if mode is 'train':  # we only want to shuffle for training dataset
         dataset = dataset.shuffle(buffer_size=4 * batch_size)
@@ -104,8 +104,10 @@ def train():
         logging.info("Building graph")
         train_op = model.build_graph()  # for training
         valid_op = model.get_validation_probabilities()  # for model selection
-
-        sess = tf.Session()
+        
+        sess_conf = tf.ConfigProto()
+        sess_conf.gpu_options.allow_growth = True
+        sess = tf.Session(config=sess_conf)
 
         sess.run(tf.global_variables_initializer())
         sess.run(tf.local_variables_initializer())

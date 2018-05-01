@@ -77,8 +77,8 @@ def _get_recall_at_k(k, probs_mat):
 def get_recall_values(prob_list, k=[1, 2, 5]):
     a = np.array(prob_list)
     cols = 10
-    rows = int(len(prob_list)/cols)
-    a = a.reshape((rows, cols))
+    #rows = int(len(prob_list)/cols)
+    a = a.reshape((-1, cols))
     print("Reshaped the probabilities to ", a.shape)
     recalls = []
     example_predictions = []
