@@ -103,6 +103,7 @@ def train():
 
         logging.info("Building graph")
         train_op = model.build_graph()  # for training
+        loss_op = model.get_loss()
         valid_op = model.get_validation_probabilities()  # for model selection
         
         sess_conf = tf.ConfigProto()
@@ -127,7 +128,7 @@ def train():
         try:
             while True:
                 # here calculate accuracy and/or training loss
-                _, loss = sess.run([train_op, model.get_loss()])
+                _, loss = sess.run([train_op, loss_op])
 
                 if batch % 100 == 0:
                     logger.info("Epoch step: {0} Train step: {1} loss = {2}".format(epoch_step, batch, loss))
