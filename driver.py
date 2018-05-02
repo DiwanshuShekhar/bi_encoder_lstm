@@ -125,7 +125,7 @@ def train():
 
         # other ops for visualization, evaluation etc
         probabilities_op = model.get_validation_probabilities(logits)
-        
+
         sess_conf = tf.ConfigProto()
         sess_conf.gpu_options.allow_growth = True
         sess = tf.Session(config=sess_conf)
@@ -155,20 +155,20 @@ def train():
                 # here calculate accuracy and/or training loss
                 op_result, loss = sess.run([train_op, loss_op], feed_dict={handle: training_handle})
 
-                if batch % 2 == 0:
+                if batch % 100 == 0:
                     logger.info("Epoch step: {0} Train step: {1} loss = {2}".format(epoch_step, batch, loss))
-                
+
                 batch += 1
 
                 # evaluate the model with the validation set every 1/4 of the epoch
-                if batch % int(0.01 * num_batches_train) == 0:  # change 0.01 to 0.25 in production
+                if batch % int(0.25 * num_batches_train) == 0:  # change 0.01 to 0.25 in production
 
                     # evaluate the model on validation dataset
                     logger.info("Evaluating on the validation dataset...")
                     probs = []
                     for b in range(num_batches_valid):
-                        op_result, probabilities = sess.run([train_op, probabilities_op],
-                                                            feed_dict={handle: validation_handle})
+                        probabilities = sess.run(probabilities_op),
+                                                feed_dict={handle: validation_handle})
 
                         probs.extend(probabilities.flatten().tolist())
 
@@ -176,8 +176,8 @@ def train():
                             logger.info("Epoch step: {0} Train step: {1} Valid step: {2}".format(epoch_step,
                             batch, b))
 
-                        if b == 300:  # remove this break condition in production
-                           break
+                        #if b == 300:  # remove this break condition in production
+                        #   break
 
                     evaluation_metric_new = utils.get_recall_values(probs)[0]  # returns a tuple of list with
                     # Recall@1,2 and 5 and model_responses
@@ -230,9 +230,4 @@ if __name__ == "__main__":
     print(m)
     """
     train()
-    #review = "It nicely predicted the conditioning of human minds with that of the patient. " \
-     #       "We all believe that what we believe is true with our own point of view and we want " \
-     #       "to solve all the problem accordingly."
-    #infer(review)
-
 
