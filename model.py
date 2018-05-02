@@ -8,86 +8,44 @@ logger = logging.getLogger('model')
 
 class BiEncoderModel(object):
 
-    def __init__(self, train_iterator, validation_iterator, user_data=None):
-        self.train_data = train_iterator
-        self.validation_data = validation_iterator
-        self.user_data = user_data
+    def __init__(self):
 
         # hyper-parameters
         self.n_neurons = 300
         self.learning_rate = 0.001
 
-    def _get_train_data(self):
-        data = self.train_data.get_next()
-        self.context_embedded, self.utterance_embedded = data[0], data[1]
-        self.context_len, self.utterance_len, self.labels = data[2], data[3], data[4]
-        logging.info("Shape of context {}".format(self.context_embedded.shape))
-        logging.info("Shape of context len {}".format(self.context_len.shape))
-        logging.info("Shape of utterance {}".format(self.utterance_embedded.shape))
-        logging.info("Shape of context len {}".format(self.utterance_len.shape))
-
-    def _get_validation_data(self):
-        data = self.validation_data.get_next()
+    def _get_next_batch(self):
+        data = self.data_iterator.get_next()
         self.context_embedded, self.utterance_embedded = data[0], data[1]
         self.context_len, self.utterance_len, self.labels = data[2], data[3], data[4]
 
-        logging.info("Shape of context {}".format(self.context_embedded.shape))
-        logging.info("Shape of context len {}".format(self.context_len.shape))
-        logging.info("Shape of utterance {}".format(self.utterance_embedded.shape))
-        logging.info("Shape of context len {}".format(self.utterance_len.shape))
+    def inference(self, data):
+        self.context_embedded, self.utterance_embedded = data[0], data[1]
+        self.context_len, self.utterance_len, self.labels = data[2], data[3], data[4]
 
-    def _get_user_review(self):
-        pass
+        with tf.variable_scope('rnn_context'):
+            cell_context = tf.nn.rnn_cell.LSTMCell(
+                self.n_neurons,
+                forget_bias=2.0,
+                use_peepholes=True,
+                state_is_tuple=True)
 
-    def _inference(self):
-        try:
-            with tf.variable_scope('rnn_context', reuse=True):
-                cell_context = tf.nn.rnn_cell.LSTMCell(
-                    self.n_neurons,
-                    forget_bias=2.0,
-                    use_peepholes=True,
-                    state_is_tuple=True)
+            # Run the utterance and context through the RNN
+            outputs_contexts, encoding_context = tf.nn.dynamic_rnn(cell_context,
+                                                                   self.context_embedded,
+                                                                   dtype=tf.float32,
+                                                                   sequence_length=self.context_len)
+        with tf.variable_scope("rnn_response"):
+            cell_response = tf.nn.rnn_cell.LSTMCell(
+                self.n_neurons,
+                forget_bias=2.0,
+                use_peepholes=True,
+                state_is_tuple=True)
 
-                # Run the utterance and context through the RNN
-                outputs_contexts, encoding_context = tf.nn.dynamic_rnn(cell_context,
-                                                                       self.context_embedded,
-                                                                       dtype=tf.float32,
-                                                                       sequence_length=self.context_len)
-            with tf.variable_scope("rnn_response", reuse=True):
-                cell_response = tf.nn.rnn_cell.LSTMCell(
-                    self.n_neurons,
-                    forget_bias=2.0,
-                    use_peepholes=True,
-                    state_is_tuple=True)
-
-                outputs_responses, encoding_utterance = tf.nn.dynamic_rnn(cell_response,
-                                                                          self.utterance_embedded,
-                                                                          dtype=tf.float32,
-                                                                          sequence_length=self.utterance_len)
-        except ValueError:
-            with tf.variable_scope('rnn_context'):
-                cell_context = tf.nn.rnn_cell.LSTMCell(
-                    self.n_neurons,
-                    forget_bias=2.0,
-                    use_peepholes=True,
-                    state_is_tuple=True)
-
-                # Run the utterance and context through the RNN
-                outputs_contexts, encoding_context = tf.nn.dynamic_rnn(cell_context,
-                                                                       self.context_embedded,
-                                                                       dtype=tf.float32,
-                                                                       sequence_length=self.context_len)
-            with tf.variable_scope("rnn_response"):
-                cell_response = tf.nn.rnn_cell.LSTMCell(
-                    self.n_neurons,
-                    forget_bias=2.0,
-                    use_peepholes=True,
-                    state_is_tuple=True)
-
-                outputs_responses, encoding_utterance = tf.nn.dynamic_rnn(cell_response,
-                                                                          self.utterance_embedded,
-                                                                          dtype=tf.float32,
-                                                                          sequence_length=self.utterance_len)
+            outputs_responses, encoding_utterance = tf.nn.dynamic_rnn(cell_response,
+                                                                      self.utterance_embedded,
+                                                                      dtype=tf.float32,
+                                                                      sequence_length=self.utterance_len)
 
         encoding_context = encoding_context.h
         encoding_utterance = encoding_utterance.h
@@ -120,8 +78,9 @@ class BiEncoderModel(object):
         logits = tf.add(logits, bias)
         self.logits = tf.reshape(logits, [-1, 1])
         print ("Shape of logits at inference {}".format(self.logits.shape))
+        return self.logits
 
-    def _create_loss(self):
+    def create_loss(self):
         # logits and labels must have the shape (?, 1)
         logging.info("Shape of logits {0}".format(self.logits.shape))
         logits = tf.reshape(self.logits, [-1, 1])
@@ -130,23 +89,13 @@ class BiEncoderModel(object):
         with tf.name_scope('loss'):
             self.losses = tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.to_float(labels), logits=logits)
 
-    def _create_optimizer(self):
+        return tf.reduce_mean(self.losses)
+
+    def create_optimizer(self):
         logging.info("Shape of losses {0}".format(self.losses.shape))
         optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate)
         train_op = optimizer.minimize(tf.reduce_mean(self.losses))
         return train_op
-
-    def build_graph(self):
-        self._get_train_data() # get batch
-        self._inference() # building graph
-        self._create_loss() # cross entropy
-        return self._create_optimizer()
-
-    def get_loss(self):
-        return tf.reduce_mean(self.losses)
-
-    def get_logits(self):
-        return self.logits
 
     def _create_predictions(self):
         probabilities = tf.sigmoid(self.logits)
@@ -164,7 +113,5 @@ class BiEncoderModel(object):
 
         return accuracy
 
-    def get_validation_probabilities(self):
-        self._get_validation_data()
-        self._inference()
-        return tf.sigmoid(self.logits)
+    def get_validation_probabilities(self, logits):
+        return tf.sigmoid(logits)
