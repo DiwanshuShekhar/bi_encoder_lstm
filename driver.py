@@ -167,8 +167,7 @@ def train():
                     logger.info("Evaluating on the validation dataset...")
                     probs = []
                     for b in range(num_batches_valid):
-                        probabilities = sess.run(probabilities_op),
-                                                feed_dict={handle: validation_handle})
+                        probabilities = sess.run(probabilities_op, feed_dict={handle: validation_handle})
 
                         probs.extend(probabilities.flatten().tolist())
 
