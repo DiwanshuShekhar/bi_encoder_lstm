@@ -68,14 +68,22 @@ def is_monotonically_decreasing(a_list):
     return True
 
 
-def _get_recall_at_k(k, probs_mat):
-    am = np.argmax(probs_mat, axis=1)
-    bool_array = am <= k
+def recall_at_k(k, prediction_matrix):
+
+    print("given pred matrix ", prediction_matrix)
+
+    def my_func(array_slice):
+        if 1 in array_slice[:k]:
+            return True
+        else:
+            return False
+
+    bool_array = np.apply_along_axis(my_func, 1, prediction_matrix)
     return np.mean(bool_array), bool_array.astype(int)
 
 
-def get_recall_values(prob_list, k=[1, 2, 5]):
-    a = np.array(prob_list)
+def get_recall_values(prediction_list, k=[1, 2, 5]):
+    a = np.array(prediction_list)
     cols = 10
     #rows = int(len(prob_list)/cols)
     a = a.reshape((-1, cols))
@@ -83,7 +91,7 @@ def get_recall_values(prob_list, k=[1, 2, 5]):
     recalls = []
     example_predictions = []
     for i in k:
-        results = _get_recall_at_k(i, a)
+        results = recall_at_k(i, a)
         recalls.append(results[0])
         example_predictions.append(results[1])
     return recalls, example_predictions
@@ -99,6 +107,10 @@ if __name__ == "__main__":
     results = get_recall_values(a1)
     print("recalls ", results[0])
     print("examples ", results[1])
+
+    pred_mat = np.random.randint(2, size=(5, 10))
+    result = recall_at_k(2, pred_mat)
+    print("new recall", result)
 
 
 
