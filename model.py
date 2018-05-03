@@ -97,10 +97,11 @@ class BiEncoderModel(object):
         train_op = optimizer.minimize(tf.reduce_mean(self.losses))
         return train_op
 
-    def _create_predictions(self):
-        probabilities = tf.sigmoid(self.logits)
+    def get_predictions(self, logits):
+        probabilities = tf.sigmoid(logits)
         self.predicted_labels = tf.greater_equal(probabilities, 0.5)
         self.predicted_labels = tf.cast(self.predicted_labels, tf.int64)
+        return self.predicted_labels
         
     def _create_accuracy(self):
         # labels and predicted labels must have the shape (?, 1)
