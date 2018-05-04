@@ -11,7 +11,7 @@ class BiEncoderModel(object):
     def __init__(self):
 
         # hyper-parameters
-        self.n_neurons = 300
+        self.n_neurons = 256
         self.learning_rate = 0.001
 
     def _get_next_batch(self):
@@ -102,7 +102,7 @@ class BiEncoderModel(object):
         self.predicted_labels = tf.greater_equal(probabilities, 0.5)
         self.predicted_labels = tf.cast(self.predicted_labels, tf.int64)
         return self.predicted_labels
-        
+
     def _create_accuracy(self):
         # labels and predicted labels must have the shape (?, 1)
         predicted_labels = tf.reshape(self.predicted_labels, [-1, 1])
