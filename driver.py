@@ -124,7 +124,7 @@ def train():
         train_op = model.create_optimizer()  # for training
 
         # other ops for visualization, evaluation etc
-        predictions_op = model.get_predictions(logits)
+        probabilities_op = model.get_validation_probabilities(logits)
 
         sess_conf = tf.ConfigProto()
         sess_conf.gpu_options.allow_growth = True
@@ -165,11 +165,11 @@ def train():
 
                     # evaluate the model on validation dataset
                     logger.info("Evaluating on the validation dataset...")
-                    predictions = []
+                    probabilities = []
                     for b in range(num_batches_valid):
-                        predictions_batch = sess.run(predictions_op, feed_dict={handle: validation_handle})
+                        probabilities_batch = sess.run(probabilities_op, feed_dict={handle: validation_handle})
 
-                        predictions.extend(predictions_batch.flatten().tolist())
+                        probabilities.extend(probabilities_batch.flatten().tolist())
 
                         if b % 100 == 0:
                             logger.info("Epoch step: {0} Train step: {1} Valid step: {2}".format(epoch_step,
@@ -178,7 +178,7 @@ def train():
                         #if b == 300:  # remove this break condition in production
                         #   break
 
-                    evaluation_metric_new = utils.get_recall_values(predictions)[0]  # returns a tuple of list with
+                    evaluation_metric_new = utils.get_recall_values(probabilities)[0]  # returns a tuple of list with
                     # Recall@1,2 and 5 and model_responses
                     logger.info("Epoch step: {0} Train step: {1} Valid step: {2} Evaluation_Metric = {3}".format(
                         epoch_step, batch, b, evaluation_metric_new))

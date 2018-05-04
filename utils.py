@@ -1,6 +1,10 @@
 import cPickle
 import numpy as np
 import json
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger('utils')
 
 
 def get_vocab(vocab_file):
@@ -68,26 +72,28 @@ def is_monotonically_decreasing(a_list):
     return True
 
 
-def recall_at_k(k, prediction_matrix):
+def recall_at_k(k, probabilities_matrix):
 
-    print("given pred matrix ", prediction_matrix)
+    # logging.info("Given probabilities_matrix {}".format(probabilities_matrix))
+    index_matrix = np.argsort(probabilities_matrix, axis=1)  # index_matrix sorts the input matrix in ascending order
+    # logging.info("Given index_matrix {}".format(index_matrix))
 
     def my_func(array_slice):
-        if 1 in array_slice[:k]:
+        array_slice = array_slice[::-1]  # reverses the array
+        if 0 in array_slice[:k]:
             return True
         else:
             return False
 
-    bool_array = np.apply_along_axis(my_func, 1, prediction_matrix)
+    bool_array = np.apply_along_axis(my_func, 1, index_matrix)
     return np.mean(bool_array), bool_array.astype(int)
 
 
-def get_recall_values(prediction_list, k=[1, 2, 5]):
-    a = np.array(prediction_list)
+def get_recall_values(probabilities_list, k=[1, 2, 5]):
+    a = np.array(probabilities_list)
     cols = 10
-    #rows = int(len(prob_list)/cols)
     a = a.reshape((-1, cols))
-    print("Reshaped the probabilities to ", a.shape)
+    logging.info("Reshaped the probabilities list to {}", a.shape)
     recalls = []
     example_predictions = []
     for i in k:
@@ -108,8 +114,8 @@ if __name__ == "__main__":
     print("recalls ", results[0])
     print("examples ", results[1])
 
-    pred_mat = np.random.randint(2, size=(5, 10))
-    result = recall_at_k(2, pred_mat)
+    prob_mat = np.random.rand(100, 10)
+    result = get_recall_values(prob_mat)
     print("new recall", result)
 
 
