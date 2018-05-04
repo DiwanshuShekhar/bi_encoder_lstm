@@ -55,14 +55,8 @@ class BiEncoderModel(object):
         M = tf.diag([1.0] * self.n_neurons)
         print ("Shape of M {}".format(M.shape))
 
-        try:
-            with tf.variable_scope("trainable_parameters", reuse=True):
-                bias = tf.get_variable("B")
-                print("Re-using bias")
-        except ValueError:
-            with tf.variable_scope("trainable_parameters"):
-                bias = tf.get_variable("B", shape=None, trainable=True, initializer=0.0)
-                print("Training bias")
+        with tf.variable_scope("trainable_parameters"):
+            bias = tf.get_variable("B", shape=None, trainable=True, initializer=0.0)
 
         # "Predict" a  response: c * M
         generated_response = tf.matmul(encoding_context, M)
