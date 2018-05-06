@@ -184,6 +184,8 @@ def train():
                     logger.info("Epoch step: {0} Train step: {1} Valid step: {2} Evaluation_Metric = {3}".format(
                         epoch_step, batch, b, evaluation_metric_new))
 
+                    test_while_training(sess, probabilities_op)
+
                     # save a model checkpoint if the new evaluated metric is better than the previous one
                     if evaluation_metric_new[2] > evaluation_metric_old:
                         best_steps = [epoch_step, batch]
@@ -270,6 +272,28 @@ def test():
         logger.info("Model prediction on examples {}".format(evaluation_metric[1]))
 
         sess.close()
+
+
+def test_while_training(sess, probabilities_op):
+    #  starting model evaluation on test set
+    logging.info("Evaluation starts...")
+    num_batches_test = int(config.NUM_EXAMPLES_TEST / config.TEST_BATCH_SIZE)
+    probabilities = []
+
+    for b in range(num_batches_test):
+        probabilities_batch = sess.run(probabilities_op)
+        probabilities.extend(probabilities_batch.flatten().tolist())
+
+        if b % 100 == 0:
+            logger.info("Test step: {}".format(b))
+
+            # if b == 300:  # remove this break condition in production
+            #   break
+
+    evaluation_metric = utils.get_recall_values(probabilities)  # returns a tuple of list with
+    # Recall@1,2 and 5 and model_responses
+    logger.info("Evaluation_Metric = {0}".format(evaluation_metric[0]))
+    logger.info("Model prediction on examples {}".format(evaluation_metric[1]))
 
 
 if __name__ == "__main__":
