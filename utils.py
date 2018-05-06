@@ -93,7 +93,7 @@ def get_recall_values(probabilities_list, k=[1, 2, 5]):
     a = np.array(probabilities_list)
     cols = 10
     a = a.reshape((-1, cols))
-    logging.info("Reshaped the probabilities list to {}", a.shape)
+    logging.info("Reshaped the probabilities list to {}".format(a.shape))
     recalls = []
     example_predictions = []
     for i in k:

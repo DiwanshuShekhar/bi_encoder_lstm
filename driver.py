@@ -7,6 +7,7 @@ import cPickle
 import os
 import json
 import time
+import sys
 from collections import deque
 
 try:
@@ -140,14 +141,14 @@ def train():
         sess.run(training_iterator.initializer)
         sess.run(validation_iterator.initializer)
 
-        saver = tf.train.Saver()
+        saver = tf.train.Saver(max_to_keep=1)
 
         #  starting the training
         logging.info("Training starts...")
         batch = 0
         epoch_step = 0
-        num_batches_train = int(1000000/config.TRAIN_BATCH_SIZE)
-        num_batches_valid = int(195600/config.VALIDATION_BATCH_SIZE)
+        num_batches_train = int(config.NUM_EXAMPLES_TRAIN/config.TRAIN_BATCH_SIZE)
+        num_batches_valid = int(config.NUM_EXAMPLES_VALID/config.VALIDATION_BATCH_SIZE)
         evaluation_metric_old = 0.0
         early_stop_counter = 0
         try:
@@ -187,7 +188,8 @@ def train():
                     if evaluation_metric_new[2] > evaluation_metric_old:
                         best_steps = [epoch_step, batch]
                         logger.info("Epoch step: {0} Train step: {1} Saving checkpoint".format(epoch_step, batch))
-                        saver.save(sess, './checkpoints/best_model.ckpt')
+                        path = os.path.join(config.CHECKPOINT_PATH, 'model_{0}_{1}.ckpt'.format(epoch_step, batch))
+                        saver.save(sess, path)
                         evaluation_metric_old = evaluation_metric_new[2]
                         early_stop_counter = 0
                     else:
@@ -210,23 +212,77 @@ def train():
         sess.close()
 
 
-if __name__ == "__main__":
+def test():
     """
-    ip = build_input_pipeline('./dataset/train.tfrecords', 50, 1)
-    data = ip.get_next()
-    sess = tf.Session()
-    sess.run(tf.global_variables_initializer())
-    sess.run(ip.initializer)
-    data_res = sess.run(data)
-    print(data_res[0], data_res[1], data_res[2])
-    sess.close()
     """
+    test_files = config.TEST_FILES
 
-    """
-    #  load embedding matrix
-    m = build_embedding_matrix(config.VOCAB_PROCESSOR, config.EMBED_FILE)
-    print("m shape", m.shape)
-    print(m)
-    """
-    train()
+    with tf.Graph().as_default():
+
+        logging.info("Building test input pipeline")
+        test_dataset = build_input_pipeline(test_files,
+                                            config.TEST_BATCH_SIZE,
+                                            num_epochs=1,
+                                            mode='valid')
+
+        test_iterator = test_dataset.make_initializable_iterator()
+        next_batch = test_iterator.get_next()
+
+        model = BiEncoderModel()
+
+        logging.info("Building graph")
+        logits = model.inference(next_batch)
+
+        # other ops for visualization, evaluation etc
+        probabilities_op = model.get_validation_probabilities(logits)
+
+        sess_conf = tf.ConfigProto()
+        sess_conf.gpu_options.allow_growth = True
+        sess = tf.Session(config=sess_conf)
+
+        sess.run(tf.global_variables_initializer())
+        sess.run(tf.local_variables_initializer())
+        sess.run(test_iterator.initializer)
+
+        saver = tf.train.Saver()
+        saver.restore(sess, config.CHECKPOINT_FILE)
+
+        #  starting model evaluation on test set
+        logging.info("Evaluation starts...")
+        batch = 0
+        epoch_step = 0
+        num_batches_test = int(config.NUM_EXAMPLES_TEST/config.TEST_BATCH_SIZE)
+        probabilities = []
+
+        for b in range(num_batches_test):
+            probabilities_batch = sess.run(probabilities_op)
+            probabilities.extend(probabilities_batch.flatten().tolist())
+
+            if b % 100 == 0:
+                logger.info("Test step: {}".format(b))
+
+                #if b == 300:  # remove this break condition in production
+                #   break
+
+        evaluation_metric = utils.get_recall_values(probabilities)  # returns a tuple of list with
+        # Recall@1,2 and 5 and model_responses
+        logger.info("Evaluation_Metric = {0}".format(evaluation_metric[0]))
+        logger.info("Model prediction on examples {}".format(evaluation_metric[1]))
+
+        sess.close()
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        usage_text = """Usage:
+                        To train:
+                        python driver.py --train
+                        To test:
+                        python driver.py --test"""
+        print(usage_text)
+    if sys.argv[1] == '--train':
+        train()
+
+    if sys.argv[1] == '--test':
+        test()
 
