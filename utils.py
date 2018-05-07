@@ -100,7 +100,20 @@ def get_recall_values(probabilities_list, k=[1, 2, 5]):
         results = recall_at_k(i, a)
         recalls.append(results[0])
         example_predictions.append(results[1])
+        print_to_file(results[1], 'recall_{}.txt'.format(i))
     return recalls, example_predictions
+
+
+def print_to_file(example_prediction, file_name):
+    """
+    example_prediction is an ndarray of 0 and 1
+    0 means the model did not predict the example within the given recall@k
+    1 means the model predicted the example within the given recall@k
+    the resultant file will be used for error analysis of the model
+    """
+    pred_list = example_prediction.tolist()
+    with open(file_name, 'w') as fh:
+        fh.write(','.join(str(e) for e in pred_list) + '\n')
 
 
 if __name__ == "__main__":
@@ -117,6 +130,5 @@ if __name__ == "__main__":
     prob_mat = np.random.rand(100, 10)
     result = get_recall_values(prob_mat)
     print("new recall", result)
-
 
 

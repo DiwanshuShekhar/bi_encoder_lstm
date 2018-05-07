@@ -121,6 +121,7 @@ def train():
 
         logging.info("Building graph")
         logits = model.inference(next_batch)
+        tf.add_to_collection('logits_tensor', logits)
         loss_op = model.create_loss()
         train_op = model.create_optimizer()  # for training
 
@@ -184,8 +185,6 @@ def train():
                     logger.info("Epoch step: {0} Train step: {1} Valid step: {2} Evaluation_Metric = {3}".format(
                         epoch_step, batch, b, evaluation_metric_new))
 
-                    test_while_training(sess, probabilities_op)
-
                     # save a model checkpoint if the new evaluated metric is better than the previous one
                     if evaluation_metric_new[2] > evaluation_metric_old:
                         best_steps = [epoch_step, batch]
@@ -214,13 +213,12 @@ def train():
         sess.close()
 
 
-def test():
+def test(checkpoint_file):
     """
     """
-    test_files = config.TEST_FILES
+    test_files = config.VALIDATION_FILES
 
     with tf.Graph().as_default():
-
         logging.info("Building test input pipeline")
         test_dataset = build_input_pipeline(test_files,
                                             config.TEST_BATCH_SIZE,
@@ -242,18 +240,15 @@ def test():
         sess_conf.gpu_options.allow_growth = True
         sess = tf.Session(config=sess_conf)
 
-        sess.run(tf.global_variables_initializer())
-        sess.run(tf.local_variables_initializer())
-        sess.run(test_iterator.initializer)
-
         saver = tf.train.Saver()
-        saver.restore(sess, config.CHECKPOINT_FILE)
+        saver.restore(sess, checkpoint_file)
+
+        logging.info("Uninitialized variables: {}".format(sess.run(tf.report_uninitialized_variables())))
+        sess.run(test_iterator.initializer)
 
         #  starting model evaluation on test set
         logging.info("Evaluation starts...")
-        batch = 0
-        epoch_step = 0
-        num_batches_test = int(config.NUM_EXAMPLES_TEST/config.TEST_BATCH_SIZE)
+        num_batches_test = int(config.NUM_EXAMPLES_VALID/config.TEST_BATCH_SIZE)
         probabilities = []
 
         for b in range(num_batches_test):
@@ -274,39 +269,18 @@ def test():
         sess.close()
 
 
-def test_while_training(sess, probabilities_op):
-    #  starting model evaluation on test set
-    logging.info("Evaluation starts...")
-    num_batches_test = int(config.NUM_EXAMPLES_TEST / config.TEST_BATCH_SIZE)
-    probabilities = []
-
-    for b in range(num_batches_test):
-        probabilities_batch = sess.run(probabilities_op)
-        probabilities.extend(probabilities_batch.flatten().tolist())
-
-        if b % 100 == 0:
-            logger.info("Test step: {}".format(b))
-
-            # if b == 300:  # remove this break condition in production
-            #   break
-
-    evaluation_metric = utils.get_recall_values(probabilities)  # returns a tuple of list with
-    # Recall@1,2 and 5 and model_responses
-    logger.info("Evaluation_Metric = {0}".format(evaluation_metric[0]))
-    logger.info("Model prediction on examples {}".format(evaluation_metric[1]))
-
-
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         usage_text = """Usage:
                         To train:
                         python driver.py --train
                         To test:
-                        python driver.py --test"""
+                        python driver.py --test checkpoints/my_model.ckpt"""
         print(usage_text)
+
     if sys.argv[1] == '--train':
         train()
 
     if sys.argv[1] == '--test':
-        test()
+        test(sys.argv[2])
 

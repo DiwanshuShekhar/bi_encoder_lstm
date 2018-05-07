@@ -11,5 +11,5 @@ NUM_EXAMPLES_TRAIN = 1000000
 NUM_EXAMPLES_VALID = 195600
 NUM_EXAMPLES_TEST = 189200
 CHECKPOINT_PATH = 'checkpoints'
-CHECKPOINT_FILE = 'checkpoints/model_{}_{}.ckpt'.format(2,5859)  # edit before running test
+CHECKPOINT_FILE = 'checkpoints/model_{}_{}.ckpt'.format(0,5859)  # edit before running test
 VOCABULARY = 'data/vocabulary.json'
