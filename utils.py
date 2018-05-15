@@ -77,6 +77,7 @@ def recall_at_k(k, probabilities_matrix):
     # logging.info("Given probabilities_matrix {}".format(probabilities_matrix))
     index_matrix = np.argsort(probabilities_matrix, axis=1)  # index_matrix sorts the input matrix in ascending order
     # logging.info("Given index_matrix {}".format(index_matrix))
+    model_answers = np.argmax(probabilities_matrix, axis=1)
 
     def my_func(array_slice):
         array_slice = array_slice[::-1]  # reverses the array
@@ -86,7 +87,7 @@ def recall_at_k(k, probabilities_matrix):
             return False
 
     bool_array = np.apply_along_axis(my_func, 1, index_matrix)
-    return np.mean(bool_array), bool_array.astype(int)
+    return np.mean(bool_array), bool_array.astype(int), model_answers
 
 
 def get_recall_values(probabilities_list, k=[1, 2, 5]):
@@ -101,6 +102,8 @@ def get_recall_values(probabilities_list, k=[1, 2, 5]):
         recalls.append(results[0])
         example_predictions.append(results[1])
         print_to_file(results[1], 'recall_{}.txt'.format(i))
+
+    print_to_file(results[2], 'model_answers.txt'.format(i))
     return recalls, example_predictions
 
 
