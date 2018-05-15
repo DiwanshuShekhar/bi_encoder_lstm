@@ -104,6 +104,12 @@ def get_recall_values(probabilities_list, k=[1, 2, 5]):
         print_to_file(results[1], 'recall_{}.txt'.format(i))
 
     print_to_file(results[2], 'model_answers.txt'.format(i))
+
+    # also print model predicted probabilities to a file
+    with open("probabilities.txt", 'w') as fh:
+        for prob_list in a:
+            fh.write(','.join(str(e) for e in prob_list) + '\n')
+
     return recalls, example_predictions
 
 
