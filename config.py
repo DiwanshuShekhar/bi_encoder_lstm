@@ -1,7 +1,8 @@
+HIDDEN_SIZE = 256
 MAX_SENTENCE_LEN = 160
 EMBED_LEN = 300
 EMBED_FILE = 'data/glove.42B.300d.txt' #  also change the EMBED_LEN when changing this
-TRAIN_BATCH_SIZE = 128
+TRAIN_BATCH_SIZE = 256
 VALIDATION_BATCH_SIZE = 400
 TEST_BATCH_SIZE = 400
 TRAIN_FILES = ['data/train.tfrecords']

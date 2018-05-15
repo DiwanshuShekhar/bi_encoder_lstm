@@ -216,7 +216,7 @@ def train():
 def test(checkpoint_file):
     """
     """
-    test_files = config.VALIDATION_FILES
+    test_files = config.TEST_FILES
 
     with tf.Graph().as_default():
         logging.info("Building test input pipeline")
@@ -248,7 +248,7 @@ def test(checkpoint_file):
 
         #  starting model evaluation on test set
         logging.info("Evaluation starts...")
-        num_batches_test = int(config.NUM_EXAMPLES_VALID/config.TEST_BATCH_SIZE)
+        num_batches_test = int(config.NUM_EXAMPLES_TEST/config.TEST_BATCH_SIZE)
         probabilities = []
 
         for b in range(num_batches_test):
