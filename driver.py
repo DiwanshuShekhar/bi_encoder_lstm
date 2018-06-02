@@ -12,8 +12,18 @@ from collections import deque
 
 try:
     from .model import BiEncoderModel
+    #from .model_19 import BiEncoderModel
+    #from .model_20 import BiEncoderModel
+    #from .model_21 import BiEncoderModel
+    #from .model_22 import BiEncoderModel
+    #from .model_dual import BiEncoderModel
 except:
     from model import BiEncoderModel
+    #from model_19 import BiEncoderModel
+    #from model_20 import BiEncoderModel
+    #from model_21 import BiEncoderModel
+    #from model_22 import BiEncoderModel
+    #from model_dual import BiEncoderModel
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -46,7 +56,8 @@ def parse_input(example):
         with tf.variable_scope('embedding'):
             embeddings_matrix = utils.build_embedding_matrix(os.path.join(BASE_DIR, config.EMBED_FILE),
                                                              vocabulary=vocabulary,
-                                                             embed_len=config.EMBED_LEN)
+                                                             embed_len=config.EMBED_LEN,
+                                                             random=False)  # True for random embedding
             embeddings_mat = tf.get_variable("word_embeddings", trainable=False, initializer=embeddings_matrix)
     print("shape of embedding matrix", embeddings_mat.shape)
 
@@ -64,8 +75,6 @@ def build_input_pipeline(in_files, batch_size, num_epochs=None, mode='train'):
     :return dataset iterator (use get_next() method to get the next batch of data from the dataset iterator
     """
     dataset = tf.data.TFRecordDataset(in_files)
-    #dataset = dataset.map(parse_input, num_threads=12,
-    #                                   output_buffer_size=10 * batch_size)  # Parse the record to tensor
 
     dataset = dataset.map(parse_input, num_parallel_calls=12)
 
@@ -137,6 +146,11 @@ def train():
         training_handle = sess.run(training_iterator.string_handle())
         validation_handle = sess.run(validation_iterator.string_handle())
 
+        # adding summaries
+        tf.summary.scalar('cross_entropy_loss', loss_op)
+        merged = tf.summary.merge_all()
+        train_writer = tf.summary.FileWriter('checkpoints', sess.graph)
+
         sess.run(tf.global_variables_initializer())
         sess.run(tf.local_variables_initializer())
         sess.run(training_iterator.initializer)
@@ -155,10 +169,11 @@ def train():
         try:
             while True:
                 # here calculate accuracy and/or training loss
-                op_result, loss = sess.run([train_op, loss_op], feed_dict={handle: training_handle})
+                op_result, loss, summary = sess.run([train_op, loss_op, merged], feed_dict={handle: training_handle})
 
                 if batch % 100 == 0:
                     logger.info("Epoch step: {0} Train step: {1} loss = {2}".format(epoch_step, batch, loss))
+                    train_writer.add_summary(summary, batch)
 
                 batch += 1
 
@@ -184,6 +199,10 @@ def train():
                     # Recall@1,2 and 5 and model_responses
                     logger.info("Epoch step: {0} Train step: {1} Valid step: {2} Evaluation_Metric = {3}".format(
                         epoch_step, batch, b, evaluation_metric_new))
+                    for i, k in enumerate([1,2,5]):
+                        summary = tf.Summary()
+                        summary.value.add(tag='recall_{}'.format(k), simple_value=evaluation_metric_new[i])
+                        train_writer.add_summary(summary, batch)
 
                     # save a model checkpoint if the new evaluated metric is better than the previous one
                     if evaluation_metric_new[2] > evaluation_metric_old:

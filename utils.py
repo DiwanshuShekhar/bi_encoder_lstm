@@ -35,13 +35,17 @@ def get_ids_from_string(review, max_sentence_length, vocabulary):
 
 def build_embedding_matrix(embeb_file,
                            vocabulary=None,
-                           embed_len=None):
+                           embed_len=None,
+                           random=False):
     """
     :param embed_file: string path to embedding file
     :param vocabulary: dictionary of word and integer id
     :return: tensor shape = [MAX_SENTENCE_LEN, embedding_dimension]
     """
     embeddings_mat = np.random.uniform(-0.25, 0.25, (len(vocabulary), embed_len)).astype("float32")
+
+    if random:
+        return embeddings_mat
 
     embed_dict = {}
     with open(embeb_file, 'r') as fh:
