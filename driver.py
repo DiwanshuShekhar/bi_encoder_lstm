@@ -16,14 +16,22 @@ try:
     #from .model_20 import BiEncoderModel
     #from .model_21 import BiEncoderModel
     #from .model_22 import BiEncoderModel
+    #from .model_23 import BiEncoderModel
+    #from .model_24 import BiEncoderModel
+    #from .model_rnn import BiEncoderModel
     #from .model_dual import BiEncoderModel
+    #from .model_dual_rnn import BiEncoderModel
 except:
     from model import BiEncoderModel
     #from model_19 import BiEncoderModel
     #from model_20 import BiEncoderModel
     #from model_21 import BiEncoderModel
     #from model_22 import BiEncoderModel
+    #from model_23 import BiEncoderModel
+    #from model_24 import BiEncoderModel
+    #from model_rnn import BiEncoderModel
     #from model_dual import BiEncoderModel
+    #from model_dual_rnn import BiEncoderModel
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -105,12 +113,13 @@ def train():
         logging.info("Building train input pipeline")
         training_dataset = build_input_pipeline(train_files,
                                                 config.TRAIN_BATCH_SIZE,
-                                                num_epochs=None)  # change num_epochs to None in production
+                                                num_epochs=None,
+                                                mode='train')  # change num_epochs to None in production
 
         logging.info("Building validation input pipeline")
         validation_dataset = build_input_pipeline(validation_files,
-                                                     config.VALIDATION_BATCH_SIZE,
-                                                     mode='valid')
+                                                  config.VALIDATION_BATCH_SIZE,
+                                                  mode='valid')
 
         # A feedable iterator is defined by a handle placeholder and its structure. We
         # could use the `output_types` and `output_shapes` properties of either
@@ -149,7 +158,8 @@ def train():
         # adding summaries
         tf.summary.scalar('cross_entropy_loss', loss_op)
         merged = tf.summary.merge_all()
-        train_writer = tf.summary.FileWriter('checkpoints', sess.graph)
+        train_writer = tf.summary.FileWriter('checkpoints/train', sess.graph)
+        validation_writer = tf.summary.FileWriter('checkpoints/validation', sess.graph)
 
         sess.run(tf.global_variables_initializer())
         sess.run(tf.local_variables_initializer())
@@ -166,6 +176,7 @@ def train():
         num_batches_valid = int(config.NUM_EXAMPLES_VALID/config.VALIDATION_BATCH_SIZE)
         evaluation_metric_old = 0.0
         early_stop_counter = 0
+        global_step_counter = 0
         try:
             while True:
                 # here calculate accuracy and/or training loss
@@ -173,7 +184,7 @@ def train():
 
                 if batch % 100 == 0:
                     logger.info("Epoch step: {0} Train step: {1} loss = {2}".format(epoch_step, batch, loss))
-                    train_writer.add_summary(summary, batch)
+                    train_writer.add_summary(summary, global_step_counter)
 
                 batch += 1
 
@@ -183,10 +194,13 @@ def train():
                     # evaluate the model on validation dataset
                     logger.info("Evaluating on the validation dataset...")
                     probabilities = []
+                    losses = []
                     for b in range(num_batches_valid):
-                        probabilities_batch = sess.run(probabilities_op, feed_dict={handle: validation_handle})
+                        probabilities_batch, loss_batch = sess.run([probabilities_op, loss_op],
+                                                                   feed_dict={handle: validation_handle})
 
                         probabilities.extend(probabilities_batch.flatten().tolist())
+                        losses.append(loss_batch)
 
                         if b % 100 == 0:
                             logger.info("Epoch step: {0} Train step: {1} Valid step: {2}".format(epoch_step,
@@ -202,7 +216,12 @@ def train():
                     for i, k in enumerate([1,2,5]):
                         summary = tf.Summary()
                         summary.value.add(tag='recall_{}'.format(k), simple_value=evaluation_metric_new[i])
-                        train_writer.add_summary(summary, batch)
+                        validation_writer.add_summary(summary, global_step_counter)
+
+                    average_loss_validation = float(sum(losses))/len(losses)
+                    summary = tf.Summary()
+                    summary.value.add(tag="cross_entropy_loss", simple_value=average_loss_validation)
+                    validation_writer.add_summary(summary, global_step_counter)
 
                     # save a model checkpoint if the new evaluated metric is better than the previous one
                     if evaluation_metric_new[2] > evaluation_metric_old:
@@ -215,8 +234,8 @@ def train():
                     else:
                         early_stop_counter = early_stop_counter + 1
 
-                    # stop the training if the early_stop_counter > 4
-                    if early_stop_counter > 4:
+                    # stop the training if the early_stop_counter > 10
+                    if early_stop_counter > 10:
                         logger.info("Best model at Epoch step: {0} Train step: {1}".format(best_steps[0], best_steps[1]))
                         logger.info("Training completed.")
                         break
@@ -225,6 +244,8 @@ def train():
                     logger.info("Completed epoch {0}".format(epoch_step))
                     batch = 0
                     epoch_step += 1
+
+                global_step_counter = global_step_counter + 1
 
         except tf.errors.OutOfRangeError:
             logging.info('Done training for {0} epochs, {1} steps.'.format(epoch_step, batch))

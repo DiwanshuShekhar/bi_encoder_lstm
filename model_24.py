@@ -24,14 +24,8 @@ class BiEncoderModel(object):
         self.context_len, self.utterance_len, self.labels = data[2], data[3], data[4]
 
         with tf.variable_scope('rnn_context'):
-            cell_context_fw = tf.nn.rnn_cell.LSTMCell(self.n_neurons,
-                                                      forget_bias=2.0,
-                                                      use_peepholes=True,
-                                                      state_is_tuple=True)
-            cell_context_bw = tf.nn.rnn_cell.LSTMCell(self.n_neurons,
-                                                      forget_bias=2.0,
-                                                      use_peepholes=True,
-                                                      state_is_tuple=True)
+            cell_context_fw = tf.nn.rnn_cell.BasicRNNCell(self.n_neurons)
+            cell_context_bw = tf.nn.rnn_cell.BasicRNNCell(self.n_neurons)
 
             # Run the utterance and context through the RNN
             outputs_context, output_states_context = tf.nn.bidirectional_dynamic_rnn(
@@ -46,17 +40,11 @@ class BiEncoderModel(object):
                                             scope=None)  # output_states is a tuple containing the final states of
             # forward and backward rnn
 
-            encoding_context = output_states_context[0].h + output_states_context[1].h  # add the final states of fw and bw final states
+            encoding_context = output_states_context[0] + output_states_context[1]  # add the final states of fw and bw final states
 
         with tf.variable_scope("rnn_response"):
-            cell_response_fw = tf.nn.rnn_cell.LSTMCell(self.n_neurons,
-                                                       forget_bias=2.0,
-                                                       use_peepholes=True,
-                                                       state_is_tuple=True)
-            cell_response_bw = tf.nn.rnn_cell.LSTMCell(self.n_neurons,
-                                                       forget_bias=2.0,
-                                                       use_peepholes=True,
-                                                       state_is_tuple=True)
+            cell_response_fw = tf.nn.rnn_cell.BasicRNNCell(self.n_neurons)
+            cell_response_bw = tf.nn.rnn_cell.BasicRNNCell(self.n_neurons)
 
             # Run the utterance and context through the RNN
             outputs_response, output_states_response = tf.nn.bidirectional_dynamic_rnn(
@@ -71,7 +59,7 @@ class BiEncoderModel(object):
                                             scope=None)  # output_states is a tuple containing the final states of
             # forward and backward rnn
 
-            encoding_utterance = output_states_response[0].h + output_states_response[1].h  # add the final states of fw and bw final states
+            encoding_utterance = output_states_response[0] + output_states_response[1]  # add the final states of fw and bw final states
 
         #encoding_context = encoding_context.h
         #encoding_utterance = encoding_utterance.h

@@ -12,7 +12,7 @@ class BiEncoderModel(object):
 
         # hyper-parameters
         self.n_neurons = config.HIDDEN_SIZE
-        self.learning_rate = 0.001
+        self.learning_rate = 0.0001
 
     def _get_next_batch(self):
         data = self.data_iterator.get_next()
