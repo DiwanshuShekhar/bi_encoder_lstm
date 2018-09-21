@@ -2,6 +2,8 @@ import os
 import csv
 import functools
 import tensorflow as tf
+import pandas as pd
+import numpy as np
 
 tf.flags.DEFINE_integer(
   "min_word_frequency", 5, "Minimum frequency of words in the vocabulary")
@@ -153,7 +155,31 @@ def write_vocabulary(vocab_processor, outfile):
   print("Saved vocabulary to {}".format(outfile))
 
 
+def get_length_stats(it):
+  """
+
+  :param it: iterator
+  :return:
+  """
+  context_length = []
+  response_length = []
+  for row in it:
+      context_length.append(len(row[0].split(" ")))
+      response_length.append(len(row[1].split(" ")))
+
+  print context_length[:10]
+  print response_length[:10]
+  data = np.array([context_length, response_length]).T
+  print data
+
+  df = pd.DataFrame(data=data, columns=['con_len', 'res_len'])
+  print(df.head(10))
+  return df.describe(percentiles=[0.3, 0.6, 0.9])
+
+
+
 if __name__ == "__main__":
+  """
   print("Creating vocabulary...")
   input_iter = create_csv_iter(TRAIN_PATH)
   input_iter = (x[0] + " " + x[1] for x in input_iter)
@@ -184,3 +210,9 @@ if __name__ == "__main__":
   #    input_filename=TRAIN_PATH,
   #    output_filename=os.path.join(FLAGS.output_dir, "train.tfrecords"),
   #    example_fn=functools.partial(create_example_train, vocab=vocab))
+  """
+  input_iter = create_csv_iter(TRAIN_PATH)
+  df = get_length_stats(input_iter)
+  print(df)
+
+
