@@ -1,4 +1,3 @@
-import cPickle
 import numpy as np
 import json
 import logging
@@ -129,7 +128,26 @@ def print_to_file(example_prediction, file_name):
         fh.write(','.join(str(e) for e in pred_list) + '\n')
 
 
+def percent_of_udc_train_vocab_in_glove(vocab_file, glove_file):
+    found = 0
+
+    glove_words = {}
+    with open(glove_file, 'r') as fh:
+        for line in fh:
+            glove_words[line.split(" ")[0]] = 1
+
+    print(len(glove_words))
+
+    with open(vocab_file, 'r') as fh:
+        for word in fh:
+            count = count + 1
+            if word.strip() in glove_words:
+                found = found + 1
+    print("Percent found: ", found/count)  # 42286/91620 = 46%
+
+
 if __name__ == "__main__":
+    """
     print(is_monotonically_decreasing([10, 9, 8, 7, 6]))  # True
     print(is_monotonically_decreasing([10, 9, 3, 7, 6]))  # False
     print(is_monotonically_decreasing([10, 10, 10, 10, 10]))  # True
@@ -143,5 +161,6 @@ if __name__ == "__main__":
     prob_mat = np.random.rand(100, 10)
     result = get_recall_values(prob_mat)
     print("new recall", result)
-
+    """
+    percent_of_udc_train_vocab_in_glove('data/vocabulary.txt', 'data/glove.42B.300d.txt')
 

@@ -1,9 +1,11 @@
 import os
 import csv
-import functools
 import tensorflow as tf
 import pandas as pd
 import numpy as np
+
+import h5py
+from bilm import dump_bilm_embeddings
 
 tf.flags.DEFINE_integer(
   "min_word_frequency", 5, "Minimum frequency of words in the vocabulary")
@@ -24,8 +26,10 @@ TRAIN_PATH = os.path.join(FLAGS.input_dir, "train.csv")
 VALIDATION_PATH = os.path.join(FLAGS.input_dir, "valid.csv")
 TEST_PATH = os.path.join(FLAGS.input_dir, "test.csv")
 
+
 def tokenizer_fn(iterator):
   return (x.split(" ") for x in iterator)
+
 
 def create_csv_iter(filename):
   """
@@ -167,16 +171,53 @@ def get_length_stats(it):
       context_length.append(len(row[0].split(" ")))
       response_length.append(len(row[1].split(" ")))
 
-  print context_length[:10]
-  print response_length[:10]
+  print(context_length[:10])
+  print(response_length[:10])
   data = np.array([context_length, response_length]).T
-  print data
+  print(data)
 
   df = pd.DataFrame(data=data, columns=['con_len', 'res_len'])
   print(df.head(10))
   return df.describe(percentiles=[0.3, 0.6, 0.9])
 
 
+def dump_train_dataset_for_elmo(input_iter, output_path):
+    with open(output_path, 'w') as fh:
+        for row in input_iter:
+            fh.write(row + "\n")
+
+
+def dump_hdf5_elmo(vocab_file, dataset_file, options_file,
+                   weight_file, embedding_file="elmo_embeddings.hdf5"):
+
+    dump_bilm_embeddings(vocab_file, dataset_file, options_file, weight_file, embedding_file)
+
+
+def dump_elmo_embedding(elmo_embedding_hdf5, elmo_dataset, output_file):
+
+    sentence_to_tokens = {}
+    word_to_embedding = {}
+
+    with open(elmo_dataset, 'r') as fh:
+        for idx, line in enumerate(fh):
+            sentence_to_tokens[str(idx)] = line.split()
+
+    with h5py.File(elmo_embedding_hdf5, 'r') as fh:
+        for idx, _ in enumerate(fh):
+            embedding_all = fh[str(idx)]
+            weighted_embedding = np.sum(embedding_all, axis=0)
+            print(weighted_embedding.shape)
+            print(len(sentence_to_tokens[str(idx)]))
+
+            for idx, word in enumerate(sentence_to_tokens[str(idx)]):
+                word_to_embedding[word] = list(weighted_embedding[idx])
+
+    print(word_to_embedding)
+
+    with open(output_file, 'w') as fh:
+        for k, v in word_to_embedding.items():
+            value_str = " ".join([str(e) for e in v])
+            fh.write(k + " " + value_str + "\n")
 
 if __name__ == "__main__":
   """
@@ -211,8 +252,22 @@ if __name__ == "__main__":
   #    output_filename=os.path.join(FLAGS.output_dir, "train.tfrecords"),
   #    example_fn=functools.partial(create_example_train, vocab=vocab))
   """
+
+  """
   input_iter = create_csv_iter(TRAIN_PATH)
   df = get_length_stats(input_iter)
   print(df)
+  """
+  #input_iter = create_csv_iter(TRAIN_PATH)
+  #input_iter = (x[0] + " " + x[1] for x in input_iter)
+  #dump_train_dataset_for_elmo(input_iter, 'data/train_dataset_elmo.txt')
+  #dump_hdf5_elmo('data/vocabulary.txt', 'data/train_dataset_elmo_sample.txt',
+  #               'data/options.json', 'data/lm_weights.hdf5', 'data/train_dataset_elmo.hdf5')
+
+  dump_elmo_embedding('data/train_dataset_elmo.hdf5', 'data/train_dataset_elmo_sample.txt', 'data/elmo.91K.32d_udcv2.txt')
+
+
+
+
 
 
