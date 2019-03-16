@@ -3,6 +3,7 @@ import csv
 import tensorflow as tf
 import pandas as pd
 import numpy as np
+import functools
 
 import h5py
 from bilm import dump_bilm_embeddings
@@ -79,6 +80,28 @@ def create_example_train(row, vocab):
   example = tf.train.Example()
   example.features.feature["context"].int64_list.value.extend(context_transformed)
   example.features.feature["utterance"].int64_list.value.extend(utterance_transformed)
+  example.features.feature["context_len"].int64_list.value.extend([context_len])
+  example.features.feature["utterance_len"].int64_list.value.extend([utterance_len])
+  example.features.feature["label"].int64_list.value.extend([label])
+  return example
+
+
+def create_example_train_elmo(row):
+  """
+  Creates a training example for the Ubuntu Dialog Corpus dataset.
+  Returnsthe a tensorflow.Example Protocol Buffer object.
+  """
+  context, utterance, label = row
+  context_tokenized = context.strip().split()
+  utterance_tokenized = utterance.strip().split()
+  context_len = len(context_tokenized)
+  utterance_len = len(utterance_tokenized)
+  label = int(float(label))
+
+  # New Example
+  example = tf.train.Example()
+  example.features.feature["context"].string_list.value.extend(context_tokenized)
+  example.features.feature["utterance"].string_list.value.extend(utterance_tokenized)
   example.features.feature["context_len"].int64_list.value.extend([context_len])
   example.features.feature["utterance_len"].int64_list.value.extend([utterance_len])
   example.features.feature["label"].int64_list.value.extend([label])
@@ -219,6 +242,39 @@ def dump_elmo_embedding(elmo_embedding_hdf5, elmo_dataset, output_file):
             value_str = " ".join([str(e) for e in v])
             fh.write(k + " " + value_str + "\n")
 
+
+def modify_validation_format_to_train_format(itr):
+    """
+    Modify valid.csv of UDCv2 to match train.csv format
+    train.csv contains context, utterance and label
+    valid.csv contains Context,Ground Truth Utterance,
+    Distractor_0,Distractor_1,Distractor_2,Distractor_3,
+    Distractor_4,Distractor_5,Distractor_6,Distractor_7,Distractor_8
+    Return an iterator such that one row from original valid.txt
+    generates 10 rows:
+    Context, Ground Truth Utterance, 1
+
+    :param itr:
+    :return:
+    """
+    for row in itr:
+        yield (row[0], row[1], 1)
+        yield (row[0], row[2], 0)
+        yield (row[0], row[3], 0)
+        yield (row[0], row[4], 0)
+        yield (row[0], row[5], 0)
+        yield (row[0], row[6], 0)
+        yield (row[0], row[7], 0)
+        yield (row[0], row[8], 0)
+        yield (row[0], row[9], 0)
+        yield (row[0], row[10], 0)
+
+
+def itr_to_csv(itr, output_file_name):
+    with open(output_file_name, 'w', newline='\n') as f:
+        writer = csv.writer(f)
+        writer.writerows(itr)
+
 if __name__ == "__main__":
   """
   print("Creating vocabulary...")
@@ -264,8 +320,17 @@ if __name__ == "__main__":
   #dump_hdf5_elmo('data/vocabulary.txt', 'data/train_dataset_elmo_sample.txt',
   #               'data/options.json', 'data/lm_weights.hdf5', 'data/train_dataset_elmo.hdf5')
 
-  dump_elmo_embedding('data/train_dataset_elmo.hdf5', 'data/train_dataset_elmo_sample.txt', 'data/elmo.91K.32d_udcv2.txt')
+  #dump_elmo_embedding('data/train_dataset_elmo.hdf5', 'data/train_dataset_elmo_sample.txt', 'data/elmo.91K.32d_udcv2.txt')
 
+  # Create train.tfrecords
+  #create_tfrecords_file(
+  #    input_filename=TRAIN_PATH,
+  #    output_filename=os.path.join(FLAGS.output_dir, "train_elmo.tfrecords"),
+  #    example_fn=functools.partial(create_example_train_elmo))
+
+  #  modify valid.csv to match train.csv format
+  itr = modify_validation_format_to_train_format(create_csv_iter('data/valid.csv'))
+  itr_to_csv(itr, 'data/valid_reformatted.csv')
 
 
 

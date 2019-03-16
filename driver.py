@@ -1,14 +1,10 @@
 import config
 import utils
-from functools import partial
 import tensorflow as tf
-import numpy as np
-import cPickle
 import os
 import json
-import time
 import sys
-from collections import deque
+import csv
 
 try:
     from .model import BiEncoderModel
@@ -40,6 +36,19 @@ logger = logging.getLogger('train')
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
+def create_csv_iter(filename_ndarray):
+  """
+  Returns an iterator over a CSV file. Skips the header.
+  """
+  filename = filename_ndarray[0].decode()
+  with open(os.path.join(BASE_DIR, filename)) as csvfile:
+    reader = csv.reader(csvfile)
+    # Skip the header
+    next(reader)
+    for row in reader:
+      yield row[0], row[1], row[2]
+
+
 def parse_input(example):
     """
 
@@ -52,6 +61,7 @@ def parse_input(example):
                                            'utterance_len': tf.FixedLenFeature([], tf.int64),
                                            'label': tf.FixedLenFeature([], tf.int64),
                                    })
+
     try:
         with tf.variable_scope('embedding', reuse=True):
             embeddings_mat = tf.get_variable("word_embeddings")
@@ -71,20 +81,75 @@ def parse_input(example):
 
     features['context'] = tf.nn.embedding_lookup(embeddings_mat, features['context'])
     features['utterance'] = tf.nn.embedding_lookup(embeddings_mat, features['utterance'])
-    print("shape of train context", features['context'].shape)
+    print("shape of train context", features['context'].shape)  # should be [max_sentence_length, word_embed_size]
     print("shape of train context len", features['context_len'].shape)
     return features['context'], features['utterance'], features['context_len'], features['utterance_len'], features['label']
 
 
-def build_input_pipeline(in_files, batch_size, num_epochs=None, mode='train'):
+def parse_input_elmo(context, utterance, label):
+    """
+    features = tf.parse_single_example(example, features={
+        'context': tf.FixedLenFeature([config.MAX_SENTENCE_LEN], tf.int64),
+        'utterance': tf.FixedLenFeature([config.MAX_SENTENCE_LEN], tf.int64),
+        'context_len': tf.FixedLenFeature([], tf.int64),
+        'utterance_len': tf.FixedLenFeature([], tf.int64),
+        'label': tf.FixedLenFeature([], tf.int64)
+    })
+
+    bilm_vocab_object = utils.build_bilm_vocab(os.path.join(BASE_DIR, config.TOKEN), 20)
+
+    tokenized_context = bilm_vocab_object.decode(features['context'].tolist()).split()
+    tokenized_utterance = bilm_vocab_object.decode(features['utterance'].tolist()).split()
+    """
+
+    def strip_and_split(sentence):
+        if sys.version_info[0] != 2:
+            sentence = sentence.decode()
+
+        sentence_tokenized = sentence.strip().split()
+        sentence_length = len(sentence_tokenized)
+        return sentence_tokenized, sentence_length
+
+    #  context
+    context_tokenized, context_tokenized_len = tf.py_func(strip_and_split, [context], [tf.string, tf.int64])
+    context_embedded = tf.py_func(utils.get_bilm_embedding,
+                       [os.path.join(BASE_DIR, 'data/options_test.json'),
+                       os.path.join(BASE_DIR, 'data/lm_weights_test.hdf5'),
+                       50, context_tokenized], tf.float32)
+    context_embedded.set_shape([20, 32])  # ToDo: match shape to bilm embedding
+    #context_embedded = tf.reshape(context_embedded, [None, 32])
+    context_tokenized_len.set_shape([])
+
+    #  utterance
+    utterance_tokenized, utterance_tokenized_len = tf.py_func(strip_and_split, [utterance], [tf.string, tf.int64])
+    utterance_embedded = tf.py_func(utils.get_bilm_embedding,
+                       [os.path.join(BASE_DIR, 'data/options_test.json'),
+                       os.path.join(BASE_DIR, 'data/lm_weights_test.hdf5'),
+                       50, utterance_tokenized], tf.float32)
+    utterance_embedded.set_shape([20, 32])  # ToDo: match shape to bilm embedding
+    #utterance_embedded = tf.reshape(utterance_embedded, [None, 32])
+    utterance_tokenized_len.set_shape([])
+
+    return context_embedded, utterance_embedded, context_tokenized_len, utterance_tokenized_len, tf.cast(label, tf.int64)
+
+
+def build_input_pipeline(in_files, batch_size, num_epochs=None, mode='train', use_elmo=False):
     """
     Build an input pipeline with the DataSet API
     :param in_files list of tfrecords filenames
     :return dataset iterator (use get_next() method to get the next batch of data from the dataset iterator
     """
-    dataset = tf.data.TFRecordDataset(in_files)
+    if use_elmo:
+        dataset = tf.data.Dataset.from_generator(create_csv_iter,
+                                                 (tf.string, tf.string, tf.int64),
+                                                 args=[tf.constant(in_files, tf.string)])
+    else:
+        dataset = tf.data.TFRecordDataset(in_files)
 
-    dataset = dataset.map(parse_input, num_parallel_calls=12)
+    if use_elmo:
+        dataset = dataset.map(parse_input_elmo, num_parallel_calls=12)
+    else:
+        dataset = dataset.map(parse_input, num_parallel_calls=12)
 
     if mode is 'train':  # we only want to shuffle for training dataset
         dataset = dataset.shuffle(buffer_size=4 * batch_size)
@@ -105,21 +170,23 @@ def train():
     Builds the graph and runs the graph in a session
     :return:
     """
-    train_files = config.TRAIN_FILES
-    validation_files = config.VALIDATION_FILES
+    train_files = ['data/train_fake.csv']
+    validation_files = ['data/valid_fake.csv']
 
     with tf.Graph().as_default():
 
         logging.info("Building train input pipeline")
         training_dataset = build_input_pipeline(train_files,
-                                                config.TRAIN_BATCH_SIZE,
+                                                10,
                                                 num_epochs=None,
-                                                mode='train')  # change num_epochs to None in production
+                                                mode='train',  # change num_epochs to None in production
+                                                use_elmo=True)
 
         logging.info("Building validation input pipeline")
         validation_dataset = build_input_pipeline(validation_files,
-                                                  config.VALIDATION_BATCH_SIZE,
-                                                  mode='valid')
+                                                  10,
+                                                  mode='valid',
+                                                  use_elmo=True)
 
         # A feedable iterator is defined by a handle placeholder and its structure. We
         # could use the `output_types` and `output_shapes` properties of either
@@ -129,6 +196,7 @@ def train():
         iterator = tf.data.Iterator.from_string_handle(
             handle, training_dataset.output_types, training_dataset.output_shapes)
         next_batch = iterator.get_next()
+        print(next_batch)
 
         # You can use feedable iterators with a variety of different kinds of iterator
         # (such as one-shot and initializable iterators).
@@ -150,6 +218,10 @@ def train():
         sess_conf.gpu_options.allow_growth = True
         sess = tf.Session(config=sess_conf)
 
+        sess.run(tf.global_variables_initializer())
+        sess.run(tf.local_variables_initializer())
+        sess.run(training_iterator.initializer)
+        sess.run(validation_iterator.initializer)
         # The `Iterator.string_handle()` method returns a tensor that can be evaluated
         # and used to feed the `handle` placeholder.
         training_handle = sess.run(training_iterator.string_handle())
@@ -160,11 +232,6 @@ def train():
         merged = tf.summary.merge_all()
         train_writer = tf.summary.FileWriter('checkpoints/train', sess.graph)
         validation_writer = tf.summary.FileWriter('checkpoints/validation', sess.graph)
-
-        sess.run(tf.global_variables_initializer())
-        sess.run(tf.local_variables_initializer())
-        sess.run(training_iterator.initializer)
-        sess.run(validation_iterator.initializer)
 
         saver = tf.train.Saver(max_to_keep=1)
 
@@ -263,7 +330,8 @@ def test(checkpoint_file):
         test_dataset = build_input_pipeline(test_files,
                                             config.TEST_BATCH_SIZE,
                                             num_epochs=1,
-                                            mode='valid')
+                                            mode='valid',
+                                            use_elmo=False)
 
         test_iterator = test_dataset.make_initializable_iterator()
         next_batch = test_iterator.get_next()
@@ -323,4 +391,5 @@ if __name__ == "__main__":
 
     if sys.argv[1] == '--test':
         test(sys.argv[2])
+
 

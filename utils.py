@@ -1,9 +1,60 @@
 import numpy as np
 import json
+import sys
 import logging
+import tensorflow as tf
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('utils')
+
+from bilm import BidirectionalLanguageModel
+from bilm.data import UnicodeCharsVocabulary, Batcher
+from typing import List
+
+
+class MyBatcher(Batcher):
+    '''
+    Batch sentences of tokenized text into character id matrices.
+    '''
+    def __init__(self, lm_vocab_file: str, max_token_length: int):
+        '''
+        lm_vocab_file = the language model vocabulary file (one line per
+            token)
+        max_token_length = the maximum number of characters in each token
+        '''
+        Batcher.__init__(self, lm_vocab_file, max_token_length)
+
+    def batch_sentences(self, sentences: List[List[str]],
+                        max_sentence_length=None):
+        '''
+        Batch the sentences as character ids
+        Each sentence is a list of tokens without <s> or </s>, e.g.
+        [['The', 'first', 'sentence', '.'], ['Second', '.']]
+        '''
+
+        if max_sentence_length:
+            n_sentences = max_sentence_length
+        else:
+            print(" max sentence length is none")
+            n_sentences = len(sentences)
+
+        print("max_sentence_length ", n_sentences)
+
+        max_length = max(len(sentence) for sentence in sentences) + 2
+
+        X_char_ids = np.zeros(
+            (n_sentences, max_length, self._max_token_length),
+            dtype=np.int64
+        )
+
+        for k, sent in enumerate(sentences):
+            length = len(sent) + 2
+            char_ids_without_mask = self._lm_vocab.encode_chars(
+                sent, split=False)
+            # add one so that 0 is the mask value
+            X_char_ids[k, :length, :] = char_ids_without_mask + 1
+
+        return X_char_ids
 
 
 def get_vocab(vocab_file):
@@ -15,6 +66,38 @@ def get_vocab(vocab_file):
         vocabulary = json.load(fh)
 
     return vocabulary
+
+
+def build_bilm_vocab(token_file, max_word_length):
+    return UnicodeCharsVocabulary(token_file, max_word_length)
+
+
+def get_bilm_embedding(options_file, weight_file, max_token_length, sentence):
+
+    if sys.version_info[0] != 2:
+        sentence = [s.decode() for s in sentence]
+
+    # Create a Batcher to map text to character ids.
+    batcher = MyBatcher("data/vocabulary.txt", max_token_length)  # vocab_file and the max token length
+
+    ids_placehoder = tf.placeholder('int32', shape=(None, None, max_token_length))
+
+    # Build the biLM graph.
+    bilm = BidirectionalLanguageModel(options_file, weight_file)
+
+    # Get ops to compute the LM embeddings.
+    embeddings_op = bilm(ids_placehoder)
+
+    with tf.Session() as sess:
+        # It is necessary to initialize variables once before running inference.
+        sess.run(tf.global_variables_initializer())
+        character_ids = batcher.batch_sentences(sentence)
+        print(character_ids)
+        # Compute ELMo representations (here for the input only, for simplicity).
+        elmo_embedding = sess.run(embeddings_op['lm_embeddings'],
+                                  feed_dict={ids_placehoder: character_ids})
+        print(elmo_embedding)
+        return elmo_embedding[0, 2, :, :]  # shape is [None, 3, max_sentence_length, 32]
 
 
 def get_ids_from_string(review, max_sentence_length, vocabulary):
